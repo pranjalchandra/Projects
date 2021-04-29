@@ -1,0 +1,220 @@
+---
+title: "text analysis IMF reports"
+author: "Pranjal"
+date: "3/16/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(tidytext)
+library(textdata)
+library(udpipe)
+library(ggraph)
+library(igraph)
+library(SnowballC)
+library(tm)
+library(gridExtra)
+library(rvest)
+library(xml2)
+#install.packages("readtext")
+library(readtext)
+#install.packages("docxtractr")
+library(docxtractr)
+#install.packages("sentimentr")
+library(sentimentr)
+
+```
+
+```{r}
+path<-getwd()
+
+dfs<- c(2010,2012,2014,2015,2016,2017,2018,2019)
+
+dfs <- as.Date(as.character(dfs), format = "%Y")
+dfs <- year(dfs)
+
+comp_sentiment<- c()
+
+for (i in dfs){
+  
+temp=readtext(paste0(path, "/IMF Reports/imf_article_4_",i,".docx"))
+
+text_df=tibble(doc=i,text=temp$text)
+  
+temp_sentiment<- unnest_tokens(text_df, sent_tokens, text, token="sentences")%>%
+  get_sentences()%>%
+  sentiment()
+
+comp_sentiment<- rbind(temp_sentiment,comp_sentiment)
+
+}
+#https://medium.com/@ODSC/an-introduction-to-sentence-level-sentiment-analysis-with-sentimentr-ac556bd7f75a
+
+
+write.csv(comp_sentiment,paste0(path,"/comp_sentiment.csv"))
+```
+
+
+```{r}
+comp_text<- c()
+
+for (i in dfs){
+  
+temp=readtext(paste0(path, "/IMF Reports/imf_article_4_",i,".docx"))
+
+temp$doc_id=i
+
+comp_text<-rbind(temp, comp_text)
+}
+
+df_udp <- udpipe(comp_text, "english")
+
+df_udp$stem<- wordStem(df_udp$token, language = "porter")
+
+
+df_udp%>%  
+ filter(!lemma %in% stop_words,
+         !upos  %in% c("PUNCT", "CCONJ","NUM","SYM")) %>%
+  #mutate_if(is.character, str_to_lower) %>% 
+  document_term_frequencies(term = "token")%>%
+  arrange(desc(freq))
+
+
+text_df=tibble(doc=i,text=temp$text)
+
+unnest_tokens(text_df,bigrams, text, token="ngrams",n=2)%>%
+  group_by(bigrams)%>%
+  count()%>%
+  arrange(desc(n))
+
+
+```
+
+```{R}
+df_udp_depend<- cbind_dependencies(df_udp, type = "parent_rowid", recursive = TRUE)
+
+#df_udp_depend%>%  
+ # select(c(token_id, token, upos,stem, dep_rel, parent_rowid, parent_rowids)) %>% 
+  #View()
+
+#Understanding dependency parsing for economy
+df_econ<- df_udp_depend%>%
+  filter(stem=="economi")
+
+edges <- subset(df_econ, head_token_id != 0, select = c("token_id", "head_token_id", "dep_rel"))
+
+edges$label <- edges$dep_rel
+
+g <- graph_from_data_frame(edges,
+                           vertices = df_econ[, c("token_id","token", "lemma", "upos", "xpos", "feats")], 
+                           directed = TRUE)
+
+#one_doc <- filter(df_udp_depend, doc_id == "Boston Globe")
+
+ggraph(g, layout = "fr") +
+  geom_edge_link(aes(label = dep_rel), arrow = arrow(length = unit(4, 'mm')), end_cap = circle(3, 'mm')) + 
+  geom_node_point(color = "lightblue", size = 5) +
+  theme_void(base_family = "") +
+  geom_node_text(ggplot2::aes(label = token), vjust = 1.8) +
+  ggtitle("Showing dependencies")
+
+
+dat_econ_dep <-  
+
+dat_w_dependencies %>% 
+  select(c(token_id, token, upos, dep_rel, parent_rowid, parent_rowids)) %>% 
+  View()
+  
+  
+#Understanding dependency parsing for risk
+df_19_udp%>%
+  filter(stem=="risk")
+
+
+#Understanding dependency parsing for investment
+
+
+#understanding dependency parsing for debt
+
+
+```
+```{r}
+
+    
+    output$plot2 <- renderPlotly({ 
+    if (input$option=="Industry") {
+
+        plt_2<-ggplot()+
+          geom_point(data=subset(year_state_data,!is.na(state.wise.number.of.workers)),
+                  aes(x=state.wise.number.of.workers))+
+          geom_sf(data=subset(year_state_data_sf(),!is.na(state.wise.number.of.workers.1)),
+                  aes(fill=state.wise.number.of.workers.1))+
+  scale_size_continuous()+
+          labs(fill="Number of Workers")+
+          theme_minimal()
+    
+        ggplotly(plt_2)
+    } 
+      else if (input$option=="State Domestic Product") 
+    {   
+            plt_2<-ggplot()+
+  geom_sf(data=subset(year_state_data_sf(),
+                      !is.na(net.state.value.added.by.economic.activity.agriculture.5)),
+aes(fill=as.numeric(`net.state.value.added.by.economic.activity.agriculture.5`)))+
+    geom_sf(data=subset(year_state_data_sf(),
+                        !is.na(net.state.value.added.by.economic.activity.agriculture.4)),
+        aes(fill=as.numeric(`net.state.value.added.by.economic.activity.agriculture.4`)))+
+              geom_sf(data=subset(year_state_data_sf(),!is.na(net.state.value.added.by.economic.activity.agriculture.3)),
+                      aes(fill=as.numeric(`net.state.value.added.by.economic.activity.agriculture.3`)))+
+                geom_sf(data=subset(year_state_data_sf(),!is.na(net.state.value.added.by.economic.activity.agriculture.2)),
+                      aes(fill=as.numeric(`net.state.value.added.by.economic.activity.agriculture.2`)))+
+                geom_sf(data=subset(year_state_data_sf(),!is.na(net.state.value.added.by.economic.activity.agriculture.1)),
+                      aes(fill=as.numeric(`net.state.value.added.by.economic.activity.agriculture.1`)))+
+  scale_size_continuous()+
+          labs(fill="Economic Value Added by Agriculture")+
+          theme_minimal()
+  
+              
+      ggplotly(plt_2)
+      }
+      else if (input$option=="Price and Wages"){
+        
+        plt_2<-ggplot()+
+  geom_sf(data=ind_shape)+
+  geom_sf(data=subset(year_state_data_sf(),!is.na(state.wise.average.inflation.cpi.general)),
+                      aes(fill=as.numeric(`state.wise.average.inflation.cpi.general`)))+
+  scale_size_continuous()+
+          labs(fill="Inflation")+
+          theme_minimal()
+        
+        ggplotly(plt_2)
+        
+      }
+      else if(input$option=="Demographic"){
+        
+        plt_2<-ggplot()+  
+          geom_sf(data=ind_shape)+
+  geom_sf(data=subset(year_state_data_sf(),!is.na(state.wise.unemployment.rate.usual.status.adjusted)),
+                      aes(fill=as.numeric(`state.wise.unemployment.rate.usual.status.adjusted`)))+
+          geom_sf(data=subset(year_state_data_sf(),!is.na(state.wise.unemployment.rate.usual.status.adjusted.1)),
+                      aes(fill=as.numeric(`state.wise.unemployment.rate.usual.status.adjusted.1`)))+
+    geom_sf(data=subset(year_state_data_sf(),!is.na(state.wise.unemployment.rate.usual.status.adjusted.2)),
+                      aes(fill=as.numeric(`state.wise.unemployment.rate.usual.status.adjusted.2`)))+
+  geom_sf(data=subset(year_state_data_sf(),!is.na(state.wise.unemployment.rate.usual.status.adjusted.3)),
+                      aes(fill=as.numeric(`state.wise.unemployment.rate.usual.status.adjusted.3`)))+
+  geom_sf(data=subset(year_state_data_sf(),!is.na(state.wise.unemployment.rate.usual.status.adjusted.4)),
+                      aes(fill=as.numeric(`state.wise.unemployment.rate.usual.status.adjusted.4`)))+
+  geom_sf(data=subset(year_state_data_sf(),!is.na(state.wise.unemployment.rate.usual.status.adjusted.5)),
+                      aes(fill=as.numeric(`state.wise.unemployment.rate.usual.status.adjusted.5`)))
+                  scale_size_continuous()+
+          labs(fill="Unemployment")+
+          theme_minimal()
+          
+              ggplotly(plt_2)
+      }
+  })
+
+  
+
+```

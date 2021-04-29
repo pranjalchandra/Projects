@@ -1,0 +1,13 @@
+name: final-project-pranjal
+title: final-project-pranjal
+username:
+account: pranjalchandra
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 3815370
+bundleId: 4364967
+url: https://pranjalchandra.shinyapps.io/final-project-pranjal/
+when: 1616090475.68826
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: ~$ite up.docx|~WRL3710.tmp|comp_text.csv|data cleaning file.R|english-ewt-ud-2.5-191206.udpipe|IND_adm2.cpg|IND_adm2.csv|IND_adm2.dbf|IND_adm2.prj|IND_adm2.shp|IND_adm2.shx|IND_adm3.cpg|IND_adm3.csv|IND_adm3.dbf|IND_adm3.prj|IND_adm3.shp|IND_adm3.shx|license.txt|links.csv|raw_final.csv|scraping and cleaning politicians data.R|state_data_sf.csv|state_name_up.csv|text analysis.R|text analysis_IMF_reports.Rmd|variable_names.csv|write up.docx|rough work/Data Analysis_UP Macro.Rmd|rough work/Data Analysis_UP Micro.Rmd|rough work/Data Cleaning_UP Macro.Rmd|rough work/Data Cleaning_UP Politicians.Rmd|rough work/website.Rmd|IMF Reports|Ind shape

@@ -1,0 +1,345 @@
+---
+title: "Cleaning UP Candidates"
+author: "Pranjal"
+date: "2/14/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggrepel)
+library(rvest)
+library(dplyr)
+library(stringr)
+library(tidyverse)
+library(RCurl)
+library(readxl)
+library(data.table)
+library(sf)
+library(spData)
+library(scales)
+library(plotly)
+library(RJSONIO)
+library(stringr)
+library(tidytext)
+library(haven)
+library(geojsonR)
+library(rgeos)
+library(broom)
+library(plm)
+library(lmtest)
+
+```
+
+#Loading Mirco Data
+```{r}
+
+#state_macro_data<-read.csv("C:/Users/pranj/Documents/GitHub/final-project-pranjal/state_name_up.csv")
+
+#cand_data<- read.csv(paste0(getwd(),"/final-project-pranjal2007_cand_list.csv"))
+
+#crime_data<- read.csv(paste0(getwd(), "/final-project-pranjal2007_crime_cases.csv"))
+
+trivedi_data<-read.csv(paste0(getwd(),"/TCPD_AE_Uttar_Pradesh_2021-2-9.csv"))
+
+shrug_cand<-read.csv(paste0(getwd(),"/Democracy For All/shrug-v1.4.samosa-assembly-csv/assembly_candidates_clean.csv"))%>%
+  filter(pc01_state_name=="uttar pradesh")
+  
+
+shrug_elections<-read.csv(paste0(getwd(),"/Democracy For All/shrug-v1.4.samosa-assembly-csv/assembly_elections_clean.csv"))%>%
+  filter(pc01_state_name=="uttar pradesh")
+  
+
+shrug_affidavits<- read.csv(paste0(getwd(),"/Democracy For All/shrug-v1.4.samosa-affidavits-csv/affidavits_clean.csv"))%>%
+  filter(pc01_state_name=="uttar pradesh")
+  
+shrug_ec<- read.csv(paste0(getwd(),"/Democracy For All/shrug-v1.4.samosa-pop-econ-census-csv/shrug_ec.csv"))
+
+shrug_pc11<-read.csv(paste0(getwd(),"/Democracy For All/shrug-v1.4.samosa-pop-econ-census-csv/shrug_pc11.csv"))
+
+shrug_pc01<-read.csv(paste0(getwd(),"/Democracy For All/shrug-v1.4.samosa-pop-econ-census-csv/shrug_pc01.csv"))
+
+shrug_pc91<-read.csv(paste0(getwd(),"/Democracy For All/shrug-v1.4.samosa-pop-econ-census-csv/shrug_pc91.csv"))
+
+shrug_ancillary<-read.csv(paste0(getwd(),"/Democracy For All/shrug-v1.4.samosa-ancillary-csv/shrug_ancillary.csv"))
+
+pc_01_sdk<-read.csv(paste0(getwd(),"/Democracy For All/shrug-v1.4.samosa-keys-csv/shrug_pc01_subdistrict_key.csv"))%>%
+  filter(pc01_state_name=="uttar pradesh")
+
+pc_01_dk<-read.csv(paste0(getwd(),"/Democracy For All/shrug-v1.4.samosa-keys-csv/shrug_pc01_district_key.csv"))%>%
+  filter(pc01_state_name=="uttar pradesh")
+  
+
+```
+
+#Loading Shape Files
+```{r}
+up_shape<-st_read(paste0(getwd(), "\\india-india-village-level-geospatial-socio-econ-1991-2001-up-2001-shp\\india-village-census-2001-UP.shp"))
+
+
+#ind_shape0<- st_read(paste0(getwd(),"/Ind shape/IND_adm0.shp"))
+
+#ind_shape1<- st_read(paste0(getwd(),"/Ind shape/IND_adm1.shp" ))
+
+#ind_shape2<- st_read(paste0(getwd(),"/Ind shape/IND_adm2.shp" ))
+
+#ind_shape3<- st_read(paste0(getwd(),"/Ind shape/IND_adm3.shp" ))
+
+#shrug_con<- read.csv(paste0(getwd()),"/")
+
+
+
+```
+#loading all the shape files
+```{r}
+processFile <- function(f) {
+  df <- st_read(f)
+  # ...and do stuff...
+  file.info(f)$size # dummy result
+}
+
+# Find all .shp files
+files <- dir(getwd(), recursive=TRUE, full.names=TRUE, pattern="\\.shp$")
+
+# Apply the function to all files.
+result <- sapply(files, processFile)
+
+#https://stackoverflow.com/questions/7376499/how-can-i-read-multiple-files-from-multiple-directories-into-r-for-processing/42810057
+
+files
+tables<- lapply(files, st_read)
+
+ind<-tables[-c(1,2,3,4)]
+
+full_ind<- do.call(rbind, ind)
+```
+
+#Exploring Trivedi Data
+```{r}
+length(unique(trivedi_data$Constituency_Name))
+#897
+
+trivedi_data%>%
+  filter(Year==2017)%>%
+  group_by(Constituency_Name,Sub_Region, Constituency_Type)%>%
+  count()
+
+
+
+```
+#Exploring Shrug Election Data
+```{r}
+
+up_sh_elec<-shrug_elections
+
+up_sh_elec%>%
+  filter(tr_district_name!="")%>%
+  group_by(delimid, tr_ac_name, tr_district_name)%>%
+  count()
+
+up_sh_elec%>%
+#  filter(tr_district_name!=""&(assembly_no==16|assembly_no==17))%>%
+  group_by(delimid, tr_ac_name)%>%
+  count()
+```
+
+
+
+#Joining UP Election Data with Shape
+
+##Conclusion- Shape files dont have the same 
+```{r}
+
+geo_up<-up_shape%>%
+  select(DISTRICT,SUB_DIST,TID, DID, geometry)
+
+#How many sub-districts in the shape file?
+geo_up%>%
+  group_by(DISTRICT,SUB_DIST)%>%
+  count()
+#Ans. 301
+
+#How many districts in the shape file?
+geo_up%>%
+  group_by(DISTRICT)%>%
+  count()
+#Ans 71
+
+#Which district is 0?
+up_shape%>%
+  filter(DISTRICT==0)
+
+#How many districts in the district key?
+pc_01_dk%>%
+  group_by(pc01_district_name)%>%
+  count()
+#Ans. 70
+
+#How many sub-districts in the district key?
+pc_01_sdk%>%
+  group_by(pc01_district_name, pc01_subdistrict_name)%>%
+  count()
+#Ans. 301
+
+#How many districts in shrug file?
+shrug_elections%>%
+  filter(year==2017, delimid==4)%>%
+  group_by(pc01_district_id)%>%
+  count()
+#69
+
+#How many sub-districts in shrug file?
+
+shrug_elections%>%
+  filter(year==2002)%>%
+  group_by(pc01_district_id,ac07_name)%>%
+  count()
+#Ans. 403
+
+sh_election_p89 %>%
+  group_by(tr_ac_id,pc01_district_id)%>%
+  count()
+```
+
+#Create shape files
+
+```{R}
+
+#Subset data for elections over 89
+sh_election_p89<-shrug_elections%>%
+  filter(year>=1989)
+
+
+#Creating district level shape file for uttar pradesh
+geo_up_dist<-geo_up%>%
+  group_by(DISTRICT)%>%
+  count()
+
+elec_shape_17<- st_sf(left_join(subset(sh_election_p89, year==2017&delimid==4)),geo_up_dist, 
+                          by=c("pc01_district_id"="DISTRICT"))
+
+```
+
+```{r}
+
+ggplot(data=subset(elec_shape_17))+
+  geom_sf(aes(fill=constituency_type))
+
+elec_shape_17%>%
+  group_by(pc01_district_name, constituency_type)%>%
+  count()
+
+
+elec_shape_17%>%
+  filter(pc01_district_id==1)%>%
+  group_by(pc01_district_name, tr_ac_id)%>%
+  count()
+
+```
+#2017 election data analysis 
+```{r}
+sh_election_17<-sh_election_p89%>%
+  filter(year==2017&delimid==4)
+
+#Are there constituencies where winner type differs from constituency type?
+sh_election_17%>%
+  group_by(winner_type, constituency_type)%>%
+  count()
+
+#318 GEN constituencies and 85 SC constituencies
+
+sh_election_17%>%
+  filter(winner_type!=constituency_type)
+
+#yes- tr_ac_name- unnao, bithoor, obra, dudhi
+
+#What is the distribution of parties across GEN/SC/ST categories?
+
+sh_election_17%>%
+  group_by(winner_party, winner_type)%>%
+  count()
+
+#Which were the closely competed seats in 2017?
+
+sh_cand_17<-shrug_cand%>%
+  filter(year==2017)
+
+
+trivedi_data%>%
+  filter(Year==2017)%>%
+  group_by(Party)%>%
+  summarise(m=mean(Position))%>%
+  arrange(-desc(m))
+  
+#average INC position- 2.81
+#average SP position- 2.20
+#average BSP position- 2.65
+  
+#Key battleground constituencies(win by a small margin)?
+  
+    trivedi_data%>%
+  filter(Year==2017&(Position==1)&Margin_Percentage<5)%>%
+      group_by(Party)%>%
+      count()%>%
+      ggplot()+
+      geom_col(aes(x=Party,y=n))+
+      labs(title="Distribution of Closely Contested seats Won",
+           subtitle="Percentage Margin- 5%")
+      
+  
+trivedi_data%>%
+  filter(Year==2017&(Position==1)&Margin_Percentage<1)%>%
+ggplot()+
+  geom_point(aes(x=Constituency_Name,y=Margin_Percentage, color=Party))+
+ # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  coord_flip()
+#     geom_text_repel(aes(x=Party,y=Margin_Percentage,label=), size=2)
+  
+
+
+    
+
+```
+
+
+#What are the key issues across constituencies?
+```{r}
+
+agmark<- read_dta(paste0(getwd(),"/covid_data/agmark/agmark_clean.dta"))
+
+
+```
+
+#Analysis for Website
+```{r}
+
+#up_ac<- geojson_read(paste0(getwd(), "/Uttar_Pradesh_AC_json.geojson"), what="sp")
+
+lin <- as(up_ac, "SpatialLinesDataFrame")  
+
+coords <- as.data.frame(as(lin, "SpatialPointsDataFrame"))
+
+
+#https://gis.stackexchange.com/questions/169599/extract-all-the-polygon-coordinates-from-a-spatialpolygonsdataframe
+```
+
+```{r}
+#Relevant Years- 1991, 
+
+install.packages("dummies")
+library(dummies)
+
+trivedi_data%>%
+  filter(Year>=)
+
+trivedi_data%>%
+  filter(Year>=1991)%>%
+  pivot_wider(names_from="Party",
+              values_from="Party")
+
+summary(lm(N_Cand~Incumbent+Year+Constituency_No, 
+           data=))
+
+
+```

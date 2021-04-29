@@ -1,0 +1,71 @@
+---
+title: "Political Economy Analysis of UP"
+author: "Pranjal"
+date: "2/27/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+library(rvest)
+library(dplyr)
+library(stringr)
+library(tidyverse)
+library(RCurl)
+library(readxl)
+library(data.table)
+library(sf)
+library(spData)
+library(scales)
+library(plotly)
+library(RJSONIO)
+library(stringr)
+library(tidytext)
+library(ggrepel)
+library(plm)
+library(lmtest)
+```
+
+#Load UP Files
+```{r}
+state_data<-read.csv(paste0(getwd(),"/all_state_final.csv"))
+
+ind_shape0<- st_read(paste0(getwd(), 
+                           "/Ind shape/IND_adm0.shp"))
+
+ind_shape1<- st_read(paste0(getwd(),"/Ind shape/IND_adm1.shp" ))
+
+ind_shape2<- st_read(paste0(getwd(),"/Ind shape/IND_adm2.shp" ))
+
+ind_shape3<- st_read(paste0(getwd(),"/Ind shape/IND_adm3.shp" ))
+
+up_data<-read.csv(paste0(getwd(),"/up_final.csv"))
+```
+```{r}
+colnames(state_data_sf)
+
+```
+
+```{r}
+
+
+state_data_sf<-st_sf(inner_join(ind_shape1,state_data, 
+                                 by=c("NAME_1"="state_ut")))
+
+ggplot()+
+  geom_sf(data=ind_shape0)+
+  geom_sf(data=subset(state_data_sf,year=2017), 
+          mapping=aes(fill=`net.state.value.added.by.economic.activity.services`))+
+    geom_sf(data=subset(state_data_sf,year=2017), 
+          mapping=aes(fill=`net.state.value.added.by.economic.activity.services.1`))+
+  geom_sf(data=subset(state_data_sf,year=2017), 
+          mapping=aes(fill=`net.state.value.added.by.economic.activity.services.2`))+
+    geom_sf(data=subset(state_data_sf,year=2017), 
+          mapping=aes(fill=`net.state.value.added.by.economic.activity.services.3`))+
+    geom_sf(data=subset(state_data_sf,year=2017), 
+          mapping=aes(fill=`net.state.value.added.by.economic.activity.services.4`))+
+    geom_sf(data=subset(state_data_sf,year=2017), 
+          mapping=aes(fill=`net.state.value.added.by.economic.activity.services.5`))
+```

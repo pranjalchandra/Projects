@@ -1,0 +1,233 @@
+---
+title: "Indian_MLA_Analysis"
+author: "Pranjal"
+date: "4/20/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+library(rvest)
+library(dplyr)
+library(stringr)
+library(tidyverse)
+#Create a list of All The States
+
+
+all_states<-list("bihar2015")#, "ArunachalPradesh2019","rajasthan2018", "haryana2019","telangana2018","Gujarat2017","delhi2020","bihar2015",  "chhattisgarh2018",  "goa2017", "HimachalPradesh2017","punjab2017","puducherry2016","odisha2019",  "nagaland2018",   "mizoram2018",  "meghalaya2018","manipur2017","maharashtra2019","kerala2016","madhyapradesh2018","karnataka2018","jharkhand2019","westbengal2016","uttarpradesh2017",  "uttarakhand2017","tripura2018","tamilnadu2016","sikkim2019",  "andhrapradesh2019","assam2016")
+```
+
+
+```{r}
+#Save all the links
+
+scrapped_list<- lapply(all_states, function(w) {
+
+  state_details<-read_html(paste0("http://myneta.info/",w,"/index.php?action=show_winners&sort=default"))
+
+  data.frame(id=state_details %>%
+               rvest::html_nodes("a") %>%
+               rvest::html_attr("href"),
+             state=w)
+  
+})
+```
+
+#Step2: save the list in form of a dataframe
+```{r}
+
+
+scrapped_df <- do.call(rbind, scrapped_list)
+
+#scrapped_df <- scrapped_df %>% filter(state=="rajasthan2018")
+```
+
+#Step 3: Clean the data
+```{r}
+
+winners_id<-data.frame(id=str_subset(scrapped_df$id, 
+  "^/(.{7}|.{9}|.{10}|.{11}|.{12}|.{13}|.{14}|.{15}|.{16}|.{17}|.{19}|.{20})/candidate.php[?]candidate_id=\\d{1}"))# %>%
+  left_join(all_winners_df, by="id")
+
+winners_id$id<-str_c("http://myneta.info",winners_id$id)
+
+```
+
+
+#Step 4: Scrape all the links
+
+```{r}
+
+
+last_winners_list<- c("main_title", "constituency", "details")#, "state")
+
+for (i in 1:nrow(winners_id)) {
+ 
+  url<- toString (winners_id[i,"id"])
+  
+    my_neta<- read_html(url)
+    
+    in_progress_winners<-   data.frame (
+      main_title= my_neta %>%  html_node('body') %>% xml2::xml_find_all("//h2[contains(@class, 'main-title')]") %>% rvest::html_text(), 
+      constituency= my_neta %>% html_node('body') %>% xml2::xml_find_all("//h5[contains(@class, '')]") %>% rvest::html_text(),
+      details= my_neta %>% html_node('body') %>% xml2::xml_find_all("//div[contains(@class, 'grid_2 alpha')]")%>% rvest::html_text())
+      #,state=winners_id[i,"state"])
+    
+    names(in_progress_winners)<- c("main_title", "constituency", "details")#,"state")
+    
+    last_winners_list<- rbind(in_progress_winners, last_winners_list)
+}
+  
+```
+
+##Cleaning the data
+```{r}
+library(stringi)
+
+last_winners_list$main_title<-stri_trim_both(last_winners_list$main_title)
+
+last_winners_list$constituency<-stri_trim_both(last_winners_list$constituency)
+
+last_winners_list$details<- stri_trim_both(last_winners_list$details)
+
+winner_contact_details<-last_winners_list %>% separate(details,
+                               into=c("names", "values"), 
+                               sep=":") %>%
+  pivot_wider(names_from = names, values_from = values) %>%
+  select(main_title, constituency, Party, Email, `Contact Number`)
+
+write.csv(winner_contact_details,file="C:/Users/pranj/OneDrive - The University of Chicago/Harris/RA/India/winner_contact_deta_bihar_18_may.csv")
+
+
+
+```
+
+
+##Joining States with Winners
+```{r}
+state_list<-readxl::read_xlsx("C:/Users/pranj/OneDrive - The University of Chicago/Harris/RA/India/Master List_MLAs_crime_asset.xlsx")
+
+winner_contact_details<-winner_contact_details %>% separate(main_title, 
+                                    into=c("candidate", "winner"), 
+                                    sep="(Winner)") %>% select(-winner)
+
+winner_contact_details$candidate<-str_replace_all(winner_contact_details$candidate, "[[:punct:]]", " ")
+
+winner_contact_details$candidate<-stri_trim_both(winner_contact_details$candidate)
+
+
+winner_contact_details %>% left_join(state_list,
+                                     by=c("candidate"="Candidate"))
+  
+  
+
+```
+
+
+```{r}
+
+
+write.csv(last_winners_list,file="C:/Users/pranj/Google Drive/Harris/RA/haryana_cd_list.csv")
+
+write.csv(winner_24thapril,file="C:/Users/pranj/Google Drive/Harris/RA/new_winner_24thapril.csv")
+
+
+```
+
+#Bihar's Analysis
+```{r}
+
+library(ggrepel)
+setwd("C:/Users/pranj/OneDrive - The University of Chicago/Harris/Democracy For All")
+updated_mla<-readxl::read_xlsx("Research_India.xlsx")
+
+(rul_opp_dist<-updated_mla%>% 
+  group_by(party, Ruling_Opposition) %>%
+  count()%>%
+    pivot_wider(names_from = "Ruling_Opposition",
+                values_from="n"))
+
+rul_opp_dist$Opposition[is.na(rul_opp_dist$Opposition)]<-0
+rul_opp_dist$Ruling[is.na(rul_opp_dist$Ruling)]<-0
+
+(rul_opp_dist<-rul_opp_dist%>%    
+    mutate(total=Opposition+Ruling)%>%
+    select(party,Opposition, Ruling, total))
+
+  ggplot(data=subset(rul_opp_dist, total>20))+
+  geom_point(mapping = aes(x=party, y=Opposition,color="Opposition"))+
+    geom_point(mapping = aes(x=reorder(party, Ruling), y=Ruling,color="Ruling"))+
+
+    geom_label_repel(data=subset(rul_opp_dist, party=="BJP"),
+                     mapping=aes(x=party,y=Ruling, label="14 States"),
+                     size=3)+
+    geom_label_repel(data=subset(rul_opp_dist, party=="INC"),
+                     mapping=aes(x=party,y=Ruling, label="6 States"), 
+                     size=3)+
+        geom_label_repel(data=subset(rul_opp_dist, party=="BJP"),
+                     mapping=aes(x=party,y=Opposition, label="13 States"),
+                     size=3)+
+    geom_label_repel(data=subset(rul_opp_dist, party=="INC"),
+                     mapping=aes(x=party,y=Opposition, label="19 States"), 
+                     size=3)+
+    theme_minimal()+
+    theme(plot.title = element_text(family = NULL, face = NULL, colour = "Maroon", size = 20,
+  hjust = 0, vjust = 0))+
+    labs(caption="Data Source: MyNeta")+
+    labs(title="Ruling Vs. Opposition MLAs Across Political Parties",
+         x="Political Party",y="Number of MLAs", colour="")+
+    theme(plot.title = element_text(family = NULL, face = NULL, colour = "Maroon", size = 15,
+  hjust = 0, vjust = 1), 
+  panel.background= element_rect(color="White"),
+  legend.text= element_text(size="10"),
+  axis.title.y = element_text(hjust=5, angle=0, color="Dark Blue", size=10),
+axis.title.x = element_text(hjust=1, angle=0, color="Dark Blue", size=10),
+panel.border = element_rect(colour = "black", fill=NA, size=2))+
+    coord_flip()
+  
+  
+  #Hindi
+  (rul_opp_dist<-rul_opp_dist%>%    
+    mutate(total=Opposition+Ruling)%>%
+    select(party,Opposition, Ruling, total))
+
+  ggplot(data=subset(rul_opp_dist, total>20))+
+  geom_point(mapping = aes(x=party, y=z,color="विपक्षी"))+
+    geom_point(mapping = aes(x=reorder(party, Ruling), y=Ruling,color="सरकार"))+
+
+    geom_label_repel(data=subset(rul_opp_dist, party=="BJP"),
+                     mapping=aes(x=party,y=Ruling, label="14 राज्य"),
+                     size=4)+
+    geom_label_repel(data=subset(rul_opp_dist, party=="INC"),
+                     mapping=aes(x=party,y=Ruling, label="6 राज्य"), 
+                     size=4)+
+    
+    geom_label_repel(data=subset(rul_opp_dist, party=="BJP"),
+                     mapping=aes(x=party,y=Opposition, label="13 राज्य"),
+                     size=4)+
+    geom_label_repel(data=subset(rul_opp_dist, party=="INC"),
+                     mapping=aes(x=party,y=Opposition, label="19 राज्य"), 
+                     size=4)+
+    theme_minimal()+
+    labs(title="राज्य सरकार बनाम विपक्ष: राजनीतिक दलों में विधायकों की संख्या", x="राजनीतिक दल",y="विधायकों की संख्या", color="")+
+    labs(caption="Data Source: MyNeta")+
+    theme(plot.title = element_text(family = NULL, face = NULL, colour = "Maroon", size = 22,
+  hjust = 0.25, vjust = 1), 
+  panel.background= element_rect(color="White"),
+  legend.text= element_text(size="15"),
+  axis.title.y = element_text(hjust=5, angle=0, color="Dark Blue", size=15),
+axis.title.x = element_text(hjust=1, angle=0, color="Dark Blue", size=15),
+panel.border = element_rect(colour = "black", fill=NA, size=2))+
+    coord_flip()
+  
+ 
+```
+
+```{r}
+
+  
+```
